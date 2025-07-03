@@ -1,61 +1,55 @@
 import streamlit as st
-import pandas as pd
 import folium
 from folium.plugins import HeatMap
+import pandas as pd
 from streamlit_folium import st_folium
 
-# --- Carregamento dos dados ---
-df = pd.read_excel("Incendios_com_Tipologia.xlsx")
+# Título da aplicação
+st.title("Mapa de Calor de Incêndios por Ano, Tipologia e Freguesia")
 
-# --- Conversão da data e extração do ano ---
-df["Data/hora"] = pd.to_datetime(df["Data/hora"])
-df["Ano"] = df["Data/hora"].dt.year
+# Carregar os dados
+@st.cache_data
+def carregar_dados():
+    df = pd.read_excel("Incendios_com_Tipologia.xlsx")
+    df["Data/hora"] = pd.to_datetime(df["Data/hora"])
+    df["Ano"] = df["Data/hora"].dt.year
+    df["Mês"] = df["Data/hora"].dt.month_name()
+    return df
 
-# --- Filtros interativos ---
-st.sidebar.header("Filtros")
+df = carregar_dados()
 
-# Ano
-anos_disponiveis = sorted(df["Ano"].dropna().unique())
-anos_selecionados = st.sidebar.multiselect("Ano", anos_disponiveis, default=anos_disponiveis)
+# Filtros
+anos = sorted(df["Ano"].unique())
+tipologias = sorted(df["Tipologia"].dropna().unique())
+freguesias = sorted(df["Freguesia"].dropna().unique())
 
-# Tipologia
-lista_tipologias = sorted(df["Tipologia"].dropna().unique())
-tipologias = st.sidebar.multiselect("Tipologia", lista_tipologias, default=lista_tipologias)
+ano_escolhido = st.selectbox("Seleciona o Ano", anos)
+tipologia_escolhida = st.selectbox("Seleciona a Tipologia", tipologias)
+freguesia_escolhida = st.selectbox("Seleciona a Freguesia (opcional)", ["Todas"] + freguesias)
 
-# Freguesia
-lista_freguesias = sorted(df["Freguesia"].dropna().unique())
-freguesias = st.sidebar.multiselect("Freguesia", lista_freguesias, default=lista_freguesias)
+meses_disponiveis = sorted(df[df["Ano"] == ano_escolhido]["Mês"].unique())
+mes_escolhido = st.selectbox("Seleciona o Mês (opcional)", ["Todos"] + meses_disponiveis)
 
-# Parâmetros do Heatmap
-st.sidebar.header("Parâmetros do mapa")
-raio = st.sidebar.slider("Raio", 1, 50, 15)
-blur = st.sidebar.slider("Blur", 1, 50, 10)
+# Filtrar os dados
+df_filtrado = df[(df["Ano"] == ano_escolhido) & (df["Tipologia"] == tipologia_escolhida)]
+if freguesia_escolhida != "Todas":
+    df_filtrado = df_filtrado[df_filtrado["Freguesia"] == freguesia_escolhida]
+if mes_escolhido != "Todos":
+    df_filtrado = df_filtrado[df_filtrado["Mês"] == mes_escolhido]
 
-# --- Aplicar filtros ---
-mask = (
-    (df["Ano"].isin(anos_selecionados)) &
-    (df["Tipologia"].isin(tipologias)) &
-    (df["Freguesia"].isin(freguesias))
-)
+# Gerar mapa
+if df_filtrado.empty:
+    st.warning("Não existem dados para os filtros selecionados.")
+else:
+    m = folium.Map(location=[df_filtrado["Latitude"].mean(), df_filtrado["Longitude"].mean()], zoom_start=11)
+    pontos = df_filtrado[["Latitude", "Longitude"]].dropna().values.tolist()
+    HeatMap(pontos, radius=10, blur=15).add_to(m)
+    st_folium(m, width=700, height=500)
 
-df_filtrado = df[mask]
-
-# --- Criar mapa ---
-m = folium.Map(location=[df["Latitude"].mean(), df["Longitude"].mean()], zoom_start=12)
-
-# Heatmap
-heat_data = df_filtrado[["Latitude", "Longitude"]].dropna().values.tolist()
-HeatMap(heat_data, radius=raio, blur=blur).add_to(m)
-
-# Marcadores com popups
-for _, row in df_filtrado.iterrows():
-    popup = f"<b>Tipologia:</b> {row['Tipologia']}<br><b>Data:</b> {row['Data/hora']}<br><b>Local:</b> {row['Localização']}"
-    folium.Marker(location=[row["Latitude"], row["Longitude"]], popup=popup).add_to(m)
-
-# --- Mostrar mapa ---
-st.title("Mapa de Incêndios por Tipologia")
-st.markdown(f"{len(df_filtrado)} ocorrências encontradas.")
-st_data = st_folium(m, width=800, height=600)
-
-# --- Exportação ---
-st.download_button("📥 Descarregar ficheiro filtrado", data=df_filtrado.to_csv(index=False).encode("utf-8"), file_name="incendios_filtrados.csv", mime="text/csv")
+    # Exportar ficheiro filtrado
+    st.download_button(
+        "📥 Descarregar ficheiro filtrado",
+        data=df_filtrado.to_csv(index=False).encode("utf-8"),
+        file_name="incendios_filtrados.csv",
+        mime="text/csv"
+    )
