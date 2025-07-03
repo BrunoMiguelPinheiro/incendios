@@ -5,7 +5,7 @@ import pandas as pd
 from streamlit_folium import st_folium
 
 # Título da aplicação
-st.title("Mapa de Calor de Incêndios por Ano, Tipologia e Freguesia")
+st.title("Incêndios por Ano, Tipologia e Freguesia")
 
 # Carregar os dados
 @st.cache_data
