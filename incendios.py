@@ -3,21 +3,20 @@ import pandas as pd
 import folium
 from folium.plugins import HeatMap
 from streamlit_folium import st_folium
-from datetime import datetime
 
 # --- Carregamento dos dados ---
 df = pd.read_excel("Incendios_com_Tipologia.xlsx")
 
-# --- Conversão da data ---
+# --- Conversão da data e extração do ano ---
 df["Data/hora"] = pd.to_datetime(df["Data/hora"])
+df["Ano"] = df["Data/hora"].dt.year
 
 # --- Filtros interativos ---
 st.sidebar.header("Filtros")
 
-# Data
-min_data = df["Data/hora"].min().date()
-max_data = df["Data/hora"].max().date()
-data_selecionada = st.sidebar.date_input("Data", [min_data, max_data])
+# Ano
+anos_disponiveis = sorted(df["Ano"].dropna().unique())
+anos_selecionados = st.sidebar.multiselect("Ano", anos_disponiveis, default=anos_disponiveis)
 
 # Tipologia
 lista_tipologias = sorted(df["Tipologia"].dropna().unique())
@@ -34,8 +33,7 @@ blur = st.sidebar.slider("Blur", 1, 50, 10)
 
 # --- Aplicar filtros ---
 mask = (
-    (df["Data/hora"].dt.date >= data_selecionada[0]) &
-    (df["Data/hora"].dt.date <= data_selecionada[1]) &
+    (df["Ano"].isin(anos_selecionados)) &
     (df["Tipologia"].isin(tipologias)) &
     (df["Freguesia"].isin(freguesias))
 )
